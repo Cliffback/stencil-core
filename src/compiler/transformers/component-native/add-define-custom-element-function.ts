@@ -3,8 +3,6 @@ import ts from 'typescript';
 
 import type * as d from '../../../declarations';
 import { createImportStatement, getModuleFromSourceFile } from '../transform-utils';
-// import path from 'path';
-// import * as fs from 'fs';
 
 /**
  * Import and define components along with any component dependents within the `dist-custom-elements` output.
@@ -28,72 +26,17 @@ export const addDefineCustomElementFunctions = (
 
       if (moduleFile.cmps.length) {
         const principalComponent = moduleFile.cmps[0];
-
-        // Define the runtime function to read the dotfile
-        const runtimeFunction = ts.factory.createFunctionDeclaration(
-          undefined,
-          undefined,
-          'getCustomSuffix',
-          undefined,
-          [],
-          undefined,
-          ts.factory.createBlock([
-            ts.factory.createVariableStatement(
-              undefined,
-              ts.factory.createVariableDeclarationList(
-                [
-                  ts.factory.createVariableDeclaration(
-                    'dotfilePath',
-                    undefined,
-                    undefined,
-                    ts.factory.createCallExpression(
-                      ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('path'), 'resolve'),
-                      undefined,
-                      [ts.factory.createIdentifier('__dirname'), ts.factory.createStringLiteral('.customsuffix')]
-                    )
-                  ),
-                ],
-                ts.NodeFlags.Const
-              )
-            ),
-            ts.factory.createIfStatement(
-              ts.factory.createCallExpression(
-                ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('fs'), 'existsSync'),
-                undefined,
-                [ts.factory.createIdentifier('dotfilePath')]
-              ),
-              ts.factory.createBlock([
-                ts.factory.createReturnStatement(
-                  ts.factory.createCallExpression(
-                    ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('fs'), 'readFileSync'),
-                    undefined,
-                    [ts.factory.createIdentifier('dotfilePath'), ts.factory.createStringLiteral('utf-8')]
-                  )
-                ),
-              ]),
-              ts.factory.createBlock([ts.factory.createReturnStatement(ts.factory.createStringLiteral('not-found'))])
-            ),
-          ])
-        );
-
-        newStatements.push(runtimeFunction);
-
-        // Use the runtime function to get the suffix
-        const customTagNameExpression = ts.factory.createBinaryExpression(
-          ts.factory.createStringLiteral(principalComponent.tagName),
-          ts.SyntaxKind.PlusToken,
-          ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, [])
-        );
+        tagNames.push(principalComponent.tagName);
 
         // define the current component - `customElements.define(tagName, MyProxiedComponent);`
         const customElementsDefineCallExpression = ts.factory.createCallExpression(
           ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('customElements'), 'define'),
           undefined,
-          [customTagNameExpression, ts.factory.createIdentifier(principalComponent.componentClassName)],
+          [ts.factory.createIdentifier('tagName'), ts.factory.createIdentifier(principalComponent.componentClassName)],
         );
         // create a `case` block that defines the current component. We'll add them to our switch statement later.
         caseStatements.push(
-          createCustomElementsDefineCase(principalComponent.tagName, customElementsDefineCallExpression),
+          createCustomElementsDefineCase(principalComponent.tagName + '-test1', customElementsDefineCallExpression),
         );
 
         setupComponentDependencies(moduleFile, components, newStatements, caseStatements, tagNames);
@@ -142,7 +85,7 @@ const setupComponentDependencies = (
       // define a dependent component by recursively calling their own `defineCustomElement()`
       const callExpression = ts.factory.createCallExpression(ts.factory.createIdentifier(importAs), undefined, []);
       // `case` blocks that define the dependent components. We'll add them to our switch statement later.
-      caseStatements.push(createCustomElementsDefineCase(foundDep.tagName + '-test', callExpression));
+      caseStatements.push(createCustomElementsDefineCase(foundDep.tagName + '-test2', callExpression));
     });
   });
 };
@@ -193,7 +136,7 @@ const createCustomElementsDefineCase = (tagName: string, actionExpression: ts.Ex
  *       case "my-component":
  *         if (!customElements.get(tagName)) {
  *           console.error("hello3", tagName);
- *           customElements.define(tagName + "-test3", MyProxiedComponent);
+ *           customElements.define(tagName + "-test", MyProxiedComponent);
  *           // OR for dependent components
  *           defineCustomElement(tagName);
  *         }
@@ -236,7 +179,7 @@ const addDefineCustomElementFunction = (
                 undefined,
                 undefined,
                 ts.factory.createArrayLiteralExpression(
-                  tagNames.map((tagName) => ts.factory.createStringLiteral(tagName + '-test')),
+                  tagNames.map((tagName) => ts.factory.createStringLiteral(tagName + '-test3')),
                 ),
               ),
             ],
