@@ -36,7 +36,7 @@ export const addDefineCustomElementFunctions = (
         );
         // create a `case` block that defines the current component. We'll add them to our switch statement later.
         caseStatements.push(
-          createCustomElementsDefineCase(principalComponent.tagName + '-test1', customElementsDefineCallExpression),
+          createCustomElementsDefineCase(principalComponent.tagName + '-test', customElementsDefineCallExpression), // tag for the main component
         );
 
         setupComponentDependencies(moduleFile, components, newStatements, caseStatements, tagNames);
@@ -85,7 +85,7 @@ const setupComponentDependencies = (
       // define a dependent component by recursively calling their own `defineCustomElement()`
       const callExpression = ts.factory.createCallExpression(ts.factory.createIdentifier(importAs), undefined, []);
       // `case` blocks that define the dependent components. We'll add them to our switch statement later.
-      caseStatements.push(createCustomElementsDefineCase(foundDep.tagName + '-test2', callExpression));
+      caseStatements.push(createCustomElementsDefineCase(foundDep.tagName + '-test', callExpression)); // case in switch tagnames
     });
   });
 };
@@ -179,7 +179,7 @@ const addDefineCustomElementFunction = (
                 undefined,
                 undefined,
                 ts.factory.createArrayLiteralExpression(
-                  tagNames.map((tagName) => ts.factory.createStringLiteral(tagName + '-test3')),
+                  tagNames.map((tagName) => ts.factory.createStringLiteral(tagName + '-test')), // map of tags to iterate through
                 ),
               ),
             ],
