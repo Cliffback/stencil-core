@@ -5,6 +5,66 @@ import type * as d from '../../../declarations';
 import { createImportStatement, getModuleFromSourceFile } from '../transform-utils';
 // import path from 'path';
 // import * as fs from 'fs';
+//
+
+// Define the runtime function to read the dotfile
+// const runtimeFunction = ts.factory.createFunctionDeclaration(
+//   undefined,
+//   undefined,
+//   'getCustomSuffix',
+//   undefined,
+//   [],
+//   undefined,
+//   ts.factory.createBlock([
+//     ts.factory.createVariableStatement(
+//       undefined,
+//       ts.factory.createVariableDeclarationList(
+//         [
+//           ts.factory.createVariableDeclaration(
+//             'dotfilePath',
+//             undefined,
+//             undefined,
+//             ts.factory.createCallExpression(
+//               ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('path'), 'resolve'),
+//               undefined,
+//               [ts.factory.createIdentifier('__dirname'), ts.factory.createStringLiteral('.customsuffix')],
+//             ),
+//           ),
+//         ],
+//         ts.NodeFlags.Const,
+//       ),
+//     ),
+//     ts.factory.createIfStatement(
+//       ts.factory.createCallExpression(
+//         ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('fs'), 'existsSync'),
+//         undefined,
+//         [ts.factory.createIdentifier('dotfilePath')],
+//       ),
+//       ts.factory.createBlock([
+//         ts.factory.createReturnStatement(
+//           ts.factory.createCallExpression(
+//             ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('fs'), 'readFileSync'),
+//             undefined,
+//             [ts.factory.createIdentifier('dotfilePath'), ts.factory.createStringLiteral('utf-8')],
+//           ),
+//         ),
+//       ]),
+//       ts.factory.createBlock([ts.factory.createReturnStatement(ts.factory.createStringLiteral('-test'))]),
+//     ),
+//   ]),
+// );
+
+const runtimeFunction = ts.factory.createFunctionDeclaration(
+  undefined,
+  undefined,
+  'getCustomSuffix',
+  undefined,
+  [],
+  undefined,
+  ts.factory.createBlock([
+    ts.factory.createReturnStatement(ts.factory.createStringLiteral('-test'))
+  ]),
+);
 
 /**
  * Import and define components along with any component dependents within the `dist-custom-elements` output.
@@ -28,53 +88,7 @@ export const addDefineCustomElementFunctions = (
 
       if (moduleFile.cmps.length) {
         const principalComponent = moduleFile.cmps[0];
-
-        // Define the runtime function to read the dotfile
-        const runtimeFunction = ts.factory.createFunctionDeclaration(
-          undefined,
-          undefined,
-          'getCustomSuffix',
-          undefined,
-          [],
-          undefined,
-          ts.factory.createBlock([
-            ts.factory.createVariableStatement(
-              undefined,
-              ts.factory.createVariableDeclarationList(
-                [
-                  ts.factory.createVariableDeclaration(
-                    'dotfilePath',
-                    undefined,
-                    undefined,
-                    ts.factory.createCallExpression(
-                      ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('path'), 'resolve'),
-                      undefined,
-                      [ts.factory.createIdentifier('__dirname'), ts.factory.createStringLiteral('.customsuffix')]
-                    )
-                  ),
-                ],
-                ts.NodeFlags.Const
-              )
-            ),
-            ts.factory.createIfStatement(
-              ts.factory.createCallExpression(
-                ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('fs'), 'existsSync'),
-                undefined,
-                [ts.factory.createIdentifier('dotfilePath')]
-              ),
-              ts.factory.createBlock([
-                ts.factory.createReturnStatement(
-                  ts.factory.createCallExpression(
-                    ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('fs'), 'readFileSync'),
-                    undefined,
-                    [ts.factory.createIdentifier('dotfilePath'), ts.factory.createStringLiteral('utf-8')]
-                  )
-                ),
-              ]),
-              ts.factory.createBlock([ts.factory.createReturnStatement(ts.factory.createStringLiteral('not-found'))])
-            ),
-          ])
-        );
+        tagNames.push(principalComponent.tagName);
 
         newStatements.push(runtimeFunction);
 
@@ -82,7 +96,7 @@ export const addDefineCustomElementFunctions = (
         const customTagNameExpression = ts.factory.createBinaryExpression(
           ts.factory.createStringLiteral(principalComponent.tagName),
           ts.SyntaxKind.PlusToken,
-          ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, [])
+          ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
         );
 
         // define the current component - `customElements.define(tagName, MyProxiedComponent);`
@@ -93,7 +107,7 @@ export const addDefineCustomElementFunctions = (
         );
         // create a `case` block that defines the current component. We'll add them to our switch statement later.
         caseStatements.push(
-          createCustomElementsDefineCase(principalComponent.tagName, customElementsDefineCallExpression),
+          createCustomElementsDefineCase(principalComponent.tagName, customElementsDefineCallExpression, customTagNameExpression),
         );
 
         setupComponentDependencies(moduleFile, components, newStatements, caseStatements, tagNames);
@@ -139,10 +153,16 @@ const setupComponentDependencies = (
       // Will add `import { defineCustomElement as $ComponentDefineCustomElement } from 'my-nested-component.tsx';`
       newStatements.push(createImportStatement([`defineCustomElement as ${importAs}`], foundDep.sourceFilePath));
 
+      const customTagNameExpression = ts.factory.createBinaryExpression(
+        ts.factory.createStringLiteral(foundDep.tagName),
+        ts.SyntaxKind.PlusToken,
+        ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
+      );
+
       // define a dependent component by recursively calling their own `defineCustomElement()`
       const callExpression = ts.factory.createCallExpression(ts.factory.createIdentifier(importAs), undefined, []);
       // `case` blocks that define the dependent components. We'll add them to our switch statement later.
-      caseStatements.push(createCustomElementsDefineCase(foundDep.tagName + '-test', callExpression));
+      caseStatements.push(createCustomElementsDefineCase(foundDep.tagName, callExpression, customTagNameExpression));
     });
   });
 };
@@ -163,7 +183,7 @@ const setupComponentDependencies = (
  * @param actionExpression the actual expression to call to define the customElement
  * @returns ts AST CaseClause
  */
-const createCustomElementsDefineCase = (tagName: string, actionExpression: ts.Expression): ts.CaseClause => {
+const createCustomElementsDefineCase = (tagName: string, actionExpression: ts.Expression, tagNameSuffix?: ts.Expression): ts.CaseClause => {
   return ts.factory.createCaseClause(ts.factory.createStringLiteral(tagName), [
     ts.factory.createIfStatement(
       ts.factory.createPrefixUnaryExpression(
@@ -171,7 +191,7 @@ const createCustomElementsDefineCase = (tagName: string, actionExpression: ts.Ex
         ts.factory.createCallExpression(
           ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier('customElements'), 'get'),
           undefined,
-          [ts.factory.createIdentifier('tagName')],
+          [tagNameSuffix || ts.factory.createIdentifier('tagName')],
         ),
       ),
       ts.factory.createBlock([ts.factory.createExpressionStatement(actionExpression)]),
@@ -179,7 +199,6 @@ const createCustomElementsDefineCase = (tagName: string, actionExpression: ts.Ex
     ts.factory.createBreakStatement(),
   ]);
 };
-
 /**
  * Add the main `defineCustomElement` function e.g.
  * ```javascript
@@ -236,7 +255,7 @@ const addDefineCustomElementFunction = (
                 undefined,
                 undefined,
                 ts.factory.createArrayLiteralExpression(
-                  tagNames.map((tagName) => ts.factory.createStringLiteral(tagName + '-test')),
+                  tagNames.map((tagName) => ts.factory.createStringLiteral(tagName)),
                 ),
               ),
             ],
