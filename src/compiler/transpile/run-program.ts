@@ -31,12 +31,20 @@ import { validateTranspiledComponents } from './validate-components';
           // Logging only, no modifications
           console.log('Logging component:', componentName);
           console.log('Logging node:', node);
+
+          const customTagNameExpression = ts.factory.createBinaryExpression(
+            ts.factory.createStringLiteral(componentName.text),
+            ts.SyntaxKind.PlusToken,
+            ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
+          );
+
           const newNode = ts.factory.updateCallExpression(
             node,
             node.expression,
             node.typeArguments,
             [
-              ts.factory.createStringLiteral(componentName.text + '-appended'),
+/*               ts.factory.createStringLiteral(componentName.text + '-appended'), */
+              customTagNameExpression,
               ...node.arguments.slice(1)
             ]
           );
