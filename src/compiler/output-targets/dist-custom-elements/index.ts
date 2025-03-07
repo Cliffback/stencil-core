@@ -341,22 +341,32 @@ function addSuffixToInternalReferences(context: ts.TransformationContext): ts.Tr
           const selectorArgument = node.arguments[0];
 
           if (ts.isStringLiteral(selectorArgument) && selectorArgument.text.startsWith('stn-')) {
-            const customTagNameExpression = ts.factory.createBinaryExpression(
-              ts.factory.createStringLiteral(selectorArgument.text),
-              ts.SyntaxKind.PlusToken,
-              ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
-            );
+            const selectorText = selectorArgument.text;
 
-            newNode = ts.factory.updateCallExpression(
-              node,
-              node.expression,
-              node.typeArguments,
-              [customTagNameExpression, ...node.arguments.slice(1)]
-            );
+            // Use a regular expression to find the position to insert the custom suffix
+            const match = selectorText.match(/^(stn-[a-zA-Z0-9-]+)([^a-zA-Z0-9-].*)?$/);
+            if (match) {
+              const baseSelector = match[1];
+              const rest = match[2] || '';
 
-            // Optional: Debugging logs
-            console.log('Original node:', node);
-            console.log('Modified node:', newNode);
+              const customTagNameExpression = ts.factory.createBinaryExpression(
+                ts.factory.createStringLiteral(baseSelector),
+                ts.SyntaxKind.PlusToken,
+                rest ? ts.factory.createBinaryExpression(
+                  ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
+                  ts.SyntaxKind.PlusToken,
+                  ts.factory.createStringLiteral(rest)
+                ) :
+                  ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, [])
+              );
+
+              newNode = ts.factory.updateCallExpression(
+                node,
+                node.expression,
+                node.typeArguments,
+                [customTagNameExpression, ...node.arguments.slice(1)]
+              );
+            }
           }
         }
       }
