@@ -349,17 +349,16 @@ function addSuffixToInternalReferences(context: ts.TransformationContext): ts.Tr
               const baseSelector = match[1];
               const rest = match[2] || '';
 
-              const customTagNameExpression = ts.factory.createBinaryExpression(
-                ts.factory.createStringLiteral(baseSelector),
-                ts.SyntaxKind.PlusToken,
-                rest ? ts.factory.createBinaryExpression(
-                  ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
-                  ts.SyntaxKind.PlusToken,
-                  ts.factory.createStringLiteral(rest)
-                ) :
-                  ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, [])
-              );
-
+              const customTagNameExpression =
+                ts.factory.createTemplateExpression(
+                  ts.factory.createTemplateHead(baseSelector),
+                  [
+                    ts.factory.createTemplateSpan(
+                    ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
+                      ts.factory.createTemplateTail(rest)
+                    )
+                  ]
+                );
               newNode = ts.factory.updateCallExpression(
                 node,
                 node.expression,
