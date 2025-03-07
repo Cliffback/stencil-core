@@ -20,45 +20,6 @@ import { generateAppTypes } from '../types/generate-app-types';
 import { updateStencilTypesImports } from '../types/stencil-types';
 import { validateTranspiledComponents } from './validate-components';
 
-  function addSuffixToInternalReferences(context: ts.TransformationContext): ts.Transformer<ts.SourceFile> {
-  return (rootNode: ts.SourceFile): ts.SourceFile => {
-    function visit(node: ts.Node): ts.Node {
-      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'h') {
-        const componentName = node.arguments[0];
-        if (ts.isStringLiteral(componentName)  && componentName.text.startsWith('stn-')) {
-          console.log('Found h call with component:', componentName.text);
-
-          // Logging only, no modifications
-          console.log('Logging component:', componentName);
-          console.log('Logging node:', node);
-
-          const customTagNameExpression = ts.factory.createBinaryExpression(
-            ts.factory.createStringLiteral(componentName.text),
-            ts.SyntaxKind.PlusToken,
-            ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
-          );
-
-          const newNode = ts.factory.updateCallExpression(
-            node,
-            node.expression,
-            node.typeArguments,
-            [
-/*               ts.factory.createStringLiteral(componentName.text + '-appended'), */
-              customTagNameExpression,
-              ...node.arguments.slice(1)
-            ]
-          );
-
-          // console.log('new node:', newNode)
-
-          return newNode;
-        }
-      }
-      return ts.visitEachChild(node, visit, context);
-    }
-    return ts.visitNode(rootNode, visit) as ts.SourceFile;
-  };
-}
 export const runTsProgram = async (
   config: d.ValidatedConfig,
   compilerCtx: d.CompilerCtx,
@@ -112,7 +73,6 @@ export const runTsProgram = async (
       convertDecoratorsToStatic(config, buildCtx.diagnostics, tsTypeChecker, tsProgram),
       performAutomaticKeyInsertion,
     ],
-    after: [addSuffixToInternalReferences],
     afterDeclarations: [],
   };
 

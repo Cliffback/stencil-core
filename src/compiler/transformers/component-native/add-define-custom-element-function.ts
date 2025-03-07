@@ -183,7 +183,7 @@ const setupComponentDependencies = (
  * @param actionExpression the actual expression to call to define the customElement
  * @returns ts AST CaseClause
  */
-const createCustomElementsDefineCase = (tagName: string, actionExpression: ts.Expression, tagNameSuffix?: ts.Expression): ts.CaseClause => {
+const createCustomElementsDefineCase = (tagName: string, actionExpression: ts.Expression, tagNameSuffix: ts.Expression): ts.CaseClause => {
   return ts.factory.createCaseClause(ts.factory.createStringLiteral(tagName), [
     ts.factory.createIfStatement(
       ts.factory.createPrefixUnaryExpression(

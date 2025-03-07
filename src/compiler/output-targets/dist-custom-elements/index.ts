@@ -276,7 +276,8 @@ export const generateEntryPoint = (
       ...cmpNames.map((cmp) => `            ${cmp},`),
       '        ].forEach(cmp => {',
       '            if (!customElements.get(cmp.is)) {',
-      '                customElements.define(cmp.is, cmp, opts);',
+      '                console.warn("hello)";',
+      '                customElements.define(cmp.is + "-test", cmp, opts);',
       '            }',
       '        });',
       '    }',
@@ -303,6 +304,43 @@ export const generateEntryPoint = (
 
   return content;
 };
+
+function addSuffixToInternalReferences(context: ts.TransformationContext): ts.Transformer<ts.SourceFile> {
+  return (rootNode: ts.SourceFile): ts.SourceFile => {
+    function visit(node: ts.Node): ts.Node {
+      let newNode: ts.Node = node;
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'h') {
+        const componentName = node.arguments[0];
+
+        if (ts.isStringLiteral(componentName) && componentName.text.startsWith('stn-')) {
+          // console.log('Found h call with component:', componentName.text);
+          // console.log('Logging component:', componentName);
+          // console.log('Logging node:', node);
+
+          const customTagNameExpression = ts.factory.createBinaryExpression(
+            ts.factory.createStringLiteral(componentName.text),
+            ts.SyntaxKind.PlusToken,
+            ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
+          );
+
+
+          newNode = ts.factory.updateCallExpression(
+            node,
+            node.expression,
+            node.typeArguments,
+            [
+              customTagNameExpression,
+              ...node.arguments.slice(1)
+            ]
+          );
+        }
+      }
+      return ts.visitEachChild(newNode, visit, context);
+    }
+    return ts.visitNode(rootNode, visit) as ts.SourceFile;
+  };
+}
+
 
 /**
  * Get the series of custom transformers, specific to the needs of the
@@ -332,6 +370,7 @@ const getCustomBeforeTransformers = (
   };
   const customBeforeTransformers = [
     addDefineCustomElementFunctions(compilerCtx, components, outputTarget),
+    addSuffixToInternalReferences,
     updateStencilCoreImports(transformOpts.coreImportPath),
   ];
 
