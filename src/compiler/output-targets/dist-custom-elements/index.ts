@@ -335,6 +335,31 @@ function addSuffixToInternalReferences(context: ts.TransformationContext): ts.Tr
           );
         }
       }
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+        const methodName = node.expression.name.text;
+        if ((methodName === 'querySelector' || methodName === 'querySelectorAll') && node.arguments.length > 0) {
+          const selectorArgument = node.arguments[0];
+
+          if (ts.isStringLiteral(selectorArgument) && selectorArgument.text.startsWith('stn-')) {
+            const customTagNameExpression = ts.factory.createBinaryExpression(
+              ts.factory.createStringLiteral(selectorArgument.text),
+              ts.SyntaxKind.PlusToken,
+              ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
+            );
+
+            newNode = ts.factory.updateCallExpression(
+              node,
+              node.expression,
+              node.typeArguments,
+              [customTagNameExpression, ...node.arguments.slice(1)]
+            );
+
+            // Optional: Debugging logs
+            console.log('Original node:', node);
+            console.log('Modified node:', newNode);
+          }
+        }
+      }
       return ts.visitEachChild(newNode, visit, context);
     }
     return ts.visitNode(rootNode, visit) as ts.SourceFile;
