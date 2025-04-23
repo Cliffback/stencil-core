@@ -307,16 +307,30 @@ export const generateEntryPoint = (
 
 function addSuffixToInternalReferences(context: ts.TransformationContext): ts.Transformer<ts.SourceFile> {
   return (rootNode: ts.SourceFile): ts.SourceFile => {
+    const runtimeFunction = ts.factory.createFunctionDeclaration(
+      undefined,
+      undefined,
+      'getCustomSuffix',
+      undefined,
+      [],
+      undefined,
+      ts.factory.createBlock([
+        ts.factory.createReturnStatement(ts.factory.createStringLiteral('-test'))
+      ]),
+    );
+    const newSourceFile = ts.factory.updateSourceFile(
+      rootNode,
+      [
+        ...rootNode.statements,
+        runtimeFunction,
+      ],
+    );
+
     function visit(node: ts.Node): ts.Node {
       let newNode: ts.Node = node;
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'h') {
-        const componentName = node.arguments[0];
-
+        const componentName = node.arguments[0]
         if (ts.isStringLiteral(componentName) && componentName.text.startsWith('stn-')) {
-          // console.log('Found h call with component:', componentName.text);
-          // console.log('Logging component:', componentName);
-          // console.log('Logging node:', node);
-
           const customTagNameExpression = ts.factory.createBinaryExpression(
             ts.factory.createStringLiteral(componentName.text),
             ts.SyntaxKind.PlusToken,
@@ -343,7 +357,6 @@ function addSuffixToInternalReferences(context: ts.TransformationContext): ts.Tr
           if (ts.isStringLiteral(selectorArgument) && selectorArgument.text.startsWith('stn-')) {
             const selectorText = selectorArgument.text;
 
-            // Use a regular expression to find the position to insert the custom suffix
             const match = selectorText.match(/^(stn-[a-zA-Z0-9-]+)([^a-zA-Z0-9-].*)?$/);
             if (match) {
               const baseSelector = match[1];
@@ -369,9 +382,113 @@ function addSuffixToInternalReferences(context: ts.TransformationContext): ts.Tr
           }
         }
       }
+
+
+      if (ts.isCallExpression(node)) {
+        const expression = node.expression;
+
+        if (
+          ts.isPropertyAccessExpression(expression) &&
+          (expression.name.text === 'get' || expression.name.text === 'define') &&
+          ts.isIdentifier(expression.expression) &&
+          expression.expression.text === 'customElements'
+        ) {
+          console.log('Found customElements.get call');
+          // Replace the first argument (tagName) with a BinaryExpression
+          const [firstArg, ...restArgs] = node.arguments;
+          if (firstArg && ts.isIdentifier(firstArg) && firstArg.text === 'tagName') {
+            const newArgument = ts.factory.createBinaryExpression(
+              firstArg,
+              ts.SyntaxKind.PlusToken,
+              ts.factory.createCallExpression(
+                ts.factory.createIdentifier('getCustomSuffix'),
+                undefined,
+                []
+              )
+            );
+
+            // Return a new CallExpression with the updated argument
+            newNode = ts.factory.updateCallExpression(
+              node,
+              node.expression,
+              node.typeArguments,
+              [newArgument, ...restArgs]
+            );
+          }
+        }
+      }
+
+
+
+      if (ts.isFunctionDeclaration(node) && node.name && node.name.text.startsWith('defineCustomElement')) {
+        console.log('Found defineCustomElement$1 function declaration');
+          //         console.log('parent node:', node.parent);
+          // console.log('parent node kind:', ts.SyntaxKind[node.parent.kind]);
+          // console.log('parent node text:', node.parent.getText());
+//         const statements = [runtimeFunction, node];
+//         newNode = ts.factory.createBlock(statements, true);
+        // Do something with the function declaration
+      }
+      // if (ts.isVariableStatement(node)) {
+      //   node.declarationList.declarations.forEach(declaration => {
+      //     if (ts.isIdentifier(declaration.name) && declaration.name.text === 'components') {
+      //       if (ts.isArrayLiteralExpression(declaration.initializer)) {
+      //         const elements = declaration.initializer.elements.map(element => {
+      //           if (ts.isStringLiteral(element)) {
+      //             return element.text;
+      //           }
+      //           return null;
+      //         }).filter(element => element !== null);
+      //         console.log('Found components array:', elements);
+      //       }
+      //     }
+      //   });
+      // }
+      //
+      //
+
+      // if (ts.isVariableStatement(node)) {
+      //   let updated = false;
+      //   const newDeclarations = node.declarationList.declarations.map(declaration => {
+      //     if (ts.isIdentifier(declaration.name) && declaration.name.text === 'components') {
+      //       if (ts.isArrayLiteralExpression(declaration.initializer)) {
+      //         const updatedElements = declaration.initializer.elements.map(element => {
+      //           if (ts.isStringLiteral(element)) {
+      //             const customTagNameExpression = ts.factory.createBinaryExpression(
+      //               ts.factory.createStringLiteral(element.text),
+      //               ts.SyntaxKind.PlusToken,
+      //               ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
+      //             );
+      //             console.log(element.text);
+      //             return ts.factory.createStringLiteral(element.text + '-test');
+      //             return customTagNameExpression;
+      //           }
+      //           return element;
+      //         });
+      //         updated = true;
+      //         return ts.factory.updateVariableDeclaration(
+      //           declaration,
+      //           declaration.name,
+      //           declaration.exclamationToken,
+      //           declaration.type,
+      //           ts.factory.createArrayLiteralExpression(updatedElements, false)
+      //         );
+      //       }
+      //     }
+      //     return declaration;
+      //   });
+      //   if (updated) {
+      //     newNode = ts.factory.updateVariableStatement(
+      //       node,
+      //       node.modifiers,
+      //       ts.factory.updateVariableDeclarationList(node.declarationList, newDeclarations)
+      //     );
+      //   }
+      // }
+
       return ts.visitEachChild(newNode, visit, context);
     }
-    return ts.visitNode(rootNode, visit) as ts.SourceFile;
+    return ts.visitNode(newSourceFile, visit) as ts.SourceFile;
   };
 }
 
