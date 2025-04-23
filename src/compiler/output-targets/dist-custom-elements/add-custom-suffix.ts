@@ -46,36 +46,58 @@ export function addCustomSuffix(context: ts.TransformationContext): ts.Transform
           );
         }
       }
-      // Find all instances of `document.querySelector('stn-')` and replace them with `document.querySelector('stn-' + getCustomSuffix())`
+      // Find all instances of query selectors targeting the tagname and add the custom suffix as a template literal
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
         const methodName = node.expression.name.text;
         if ((methodName === 'querySelector' || methodName === 'querySelectorAll') && node.arguments.length > 0) {
           const selectorArgument = node.arguments[0];
 
-          if (ts.isStringLiteral(selectorArgument) && selectorArgument.text.startsWith('stn-')) {
+          if (ts.isStringLiteral(selectorArgument)) {
             const selectorText = selectorArgument.text;
+            const regex = /stn-[a-zA-Z0-9-]+/g;
+            let match: RegExpExecArray | null;
+            let lastIndex = 0;
+            const templateSpans: ts.TemplateSpan[] = [];
+            let templateHead = '';
+            let found = false;
 
-            const match = selectorText.match(/^(stn-[a-zA-Z0-9-]+)([^a-zA-Z0-9-].*)?$/);
-            if (match) {
-              const baseSelector = match[1];
-              const rest = match[2] || '';
+            while ((match = regex.exec(selectorText)) !== null) {
+              found = true;
+              const [tag] = match;
+              const start = match.index;
+              const end = regex.lastIndex;
 
-              const customTagNameExpression =
-                ts.factory.createTemplateExpression(
-                  ts.factory.createTemplateHead(baseSelector),
-                  [
-                    ts.factory.createTemplateSpan(
+              if (templateHead === '') {
+                templateHead = selectorText.slice(0, start) + tag;
+              } else {
+                templateSpans.push(
+                  ts.factory.createTemplateSpan(
                     ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
-                      ts.factory.createTemplateTail(rest)
-                    )
-                  ]
+                    ts.factory.createTemplateMiddle(selectorText.slice(lastIndex, start) + tag),
+                  ),
                 );
-              newNode = ts.factory.updateCallExpression(
-                node,
-                node.expression,
-                node.typeArguments,
-                [customTagNameExpression, ...node.arguments.slice(1)]
+              }
+
+              lastIndex = end;
+            }
+
+            if (found) {
+              // Add the final span with TemplateTail
+              templateSpans.push(
+                ts.factory.createTemplateSpan(
+                  ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
+                  ts.factory.createTemplateTail(selectorText.slice(lastIndex)),
+                ),
               );
+
+              const customTagNameExpression = ts.factory.createTemplateExpression(
+                ts.factory.createTemplateHead(templateHead),
+                templateSpans,
+              );
+              newNode = ts.factory.updateCallExpression(node, node.expression, node.typeArguments, [
+                customTagNameExpression,
+                ...node.arguments.slice(1),
+              ]);
             }
           }
         }
