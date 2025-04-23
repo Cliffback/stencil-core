@@ -9,24 +9,16 @@ export function addCustomSuffix(context: ts.TransformationContext): ts.Transform
       undefined,
       [],
       undefined,
-      ts.factory.createBlock([
-        ts.factory.createReturnStatement(ts.factory.createStringLiteral('-test'))
-      ]),
+      ts.factory.createBlock([ts.factory.createReturnStatement(ts.factory.createStringLiteral('-test'))]),
     );
-    const newSourceFile = ts.factory.updateSourceFile(
-      rootNode,
-      [
-        ...rootNode.statements,
-        runtimeFunction,
-      ],
-    );
+    const newSourceFile = ts.factory.updateSourceFile(rootNode, [...rootNode.statements, runtimeFunction]);
 
     function visit(node: ts.Node): ts.Node {
       let newNode: ts.Node = node;
 
       // Find all instances of `h('stn-')` and replace them with `h('stn-' + getCustomSuffix())`
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'h') {
-        const componentName = node.arguments[0]
+        const componentName = node.arguments[0];
         if (ts.isStringLiteral(componentName) && componentName.text.startsWith('stn-')) {
           const customTagNameExpression = ts.factory.createBinaryExpression(
             ts.factory.createStringLiteral(componentName.text),
@@ -34,16 +26,10 @@ export function addCustomSuffix(context: ts.TransformationContext): ts.Transform
             ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
           );
 
-
-          newNode = ts.factory.updateCallExpression(
-            node,
-            node.expression,
-            node.typeArguments,
-            [
-              customTagNameExpression,
-              ...node.arguments.slice(1)
-            ]
-          );
+          newNode = ts.factory.updateCallExpression(node, node.expression, node.typeArguments, [
+            customTagNameExpression,
+            ...node.arguments.slice(1),
+          ]);
         }
       }
       // Find all instances of query selectors targeting the tagname and add the custom suffix as a template literal
@@ -118,19 +104,13 @@ export function addCustomSuffix(context: ts.TransformationContext): ts.Transform
             const newArgument = ts.factory.createBinaryExpression(
               firstArg,
               ts.SyntaxKind.PlusToken,
-              ts.factory.createCallExpression(
-                ts.factory.createIdentifier('getCustomSuffix'),
-                undefined,
-                []
-              )
+              ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
             );
 
-            newNode = ts.factory.updateCallExpression(
-              node,
-              node.expression,
-              node.typeArguments,
-              [newArgument, ...restArgs]
-            );
+            newNode = ts.factory.updateCallExpression(node, node.expression, node.typeArguments, [
+              newArgument,
+              ...restArgs,
+            ]);
           }
         }
       }
@@ -140,4 +120,3 @@ export function addCustomSuffix(context: ts.TransformationContext): ts.Transform
     return ts.visitNode(newSourceFile, visit) as ts.SourceFile;
   };
 }
-
