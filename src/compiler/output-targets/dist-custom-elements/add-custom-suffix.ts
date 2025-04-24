@@ -4,7 +4,10 @@ import ts from 'typescript';
 import type * as d from '../../../declarations';
 
 
-export function addCustomSuffix(compilerCtx: d.CompilerCtx, tagNameTransform: boolean): ts.TransformerFactory<ts.SourceFile> {
+export function addCustomSuffix(
+  compilerCtx: d.CompilerCtx,
+  components: d.ComponentCompilerMeta[],
+  tagNameTransform: boolean): ts.TransformerFactory<ts.SourceFile> {
   return (context: ts.TransformationContext) => {
 
   if (!tagNameTransform) {
@@ -13,10 +16,19 @@ export function addCustomSuffix(compilerCtx: d.CompilerCtx, tagNameTransform: bo
   return (rootNode: ts.SourceFile): ts.SourceFile => {
 
     const moduleFile = getModuleFromSourceFile(compilerCtx, rootNode);
-      if (moduleFile.cmps.length) {
-        const tagName = moduleFile.cmps[0];
-        console.log('Found a component:', tagName.tagName);
-      }
+    const tagNames: string[] = [];
+    if (moduleFile.cmps.length) {
+      const mainTagName = moduleFile.cmps[0].tagName;
+      console.log('Patching:', mainTagName);
+      tagNames.push(mainTagName);
+      moduleFile.cmps.forEach((cmp) => {
+        cmp.dependencies.forEach((dCmp) => {
+          const foundDep = components.find((dComp) => dComp.tagName === dCmp);
+          tagNames.push(foundDep.tagName);
+            console.log('Found dependency:', foundDep.tagName);
+        });
+      });
+    }
     const runtimeFunction = ts.factory.createFunctionDeclaration(
       undefined,
       undefined,
@@ -31,10 +43,10 @@ export function addCustomSuffix(compilerCtx: d.CompilerCtx, tagNameTransform: bo
     function visit(node: ts.Node): ts.Node {
       let newNode: ts.Node = node;
 
-      // Find all instances of `h('stn-')` and replace them with `h('stn-' + getCustomSuffix())`
+      // Find all instances of `h('tagName')` and replace them with `h('tagName' + getCustomSuffix())`
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'h') {
         const componentName = node.arguments[0];
-        if (ts.isStringLiteral(componentName) && componentName.text.startsWith('stn-')) {
+        if (ts.isStringLiteral(componentName) && tagNames.some(tag => componentName.text.startsWith(tag))) {
           const customTagNameExpression = ts.factory.createBinaryExpression(
             ts.factory.createStringLiteral(componentName.text),
             ts.SyntaxKind.PlusToken,
@@ -55,42 +67,54 @@ export function addCustomSuffix(compilerCtx: d.CompilerCtx, tagNameTransform: bo
 
           if (ts.isStringLiteral(selectorArgument)) {
             const selectorText = selectorArgument.text;
-            const regex = /stn-[a-zA-Z0-9-]+/g;
-            let match: RegExpExecArray | null;
-            let lastIndex = 0;
-            const templateSpans: ts.TemplateSpan[] = [];
-            let templateHead = '';
-            let found = false;
-
-            while ((match = regex.exec(selectorText)) !== null) {
-              found = true;
-              const [tag] = match;
-              const start = match.index;
-              const end = regex.lastIndex;
-
-              if (templateHead === '') {
-                templateHead = selectorText.slice(0, start) + tag;
-              } else {
-                templateSpans.push(
-                  ts.factory.createTemplateSpan(
-                    ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
-                    ts.factory.createTemplateMiddle(selectorText.slice(lastIndex, start) + tag),
-                  ),
-                );
+            // Find all matches of any tagName in selectorText, preferring the longest at each position
+            const matches: { tag: string; start: number; end: number }[] = [];
+            let i = 0;
+            while (i < selectorText.length) {
+              let foundTag: string | undefined;
+              let foundLength = 0;
+              for (const tagName of tagNames) {
+                if (
+                  selectorText.startsWith(tagName, i) &&
+                  tagName.length > foundLength  &&
+                  (i === 0 || !/[.#]/.test(selectorText[i - 1])) // Ensure not preceded by . or #
+                ) {
+                  foundTag = tagName;
+                  foundLength = tagName.length;
+                }
               }
-
-              lastIndex = end;
+              if (foundTag) {
+                matches.push({ tag: foundTag, start: i, end: i + foundLength });
+                i += foundLength;
+              } else {
+                i++;
+              }
             }
 
-            if (found) {
-              // Add the final span with TemplateTail
+            if (matches.length > 0) {
+              let lastIndex = 0;
+              const templateSpans: ts.TemplateSpan[] = [];
+              const templateHead = selectorText.slice(0, matches[0].start) + matches[0].tag;
+              lastIndex = matches[0].end;
               templateSpans.push(
                 ts.factory.createTemplateSpan(
                   ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
-                  ts.factory.createTemplateTail(selectorText.slice(lastIndex)),
+                  matches.length === 1
+                    ? ts.factory.createTemplateTail(selectorText.slice(lastIndex))
+                    : ts.factory.createTemplateMiddle(selectorText.slice(lastIndex, matches[1].start) + matches[1].tag),
                 ),
               );
-
+              for (let j = 1; j < matches.length; j++) {
+                lastIndex = matches[j].end;
+                templateSpans.push(
+                  ts.factory.createTemplateSpan(
+                    ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
+                    j === matches.length - 1
+                      ? ts.factory.createTemplateTail(selectorText.slice(lastIndex))
+                      : ts.factory.createTemplateMiddle(selectorText.slice(lastIndex, matches[j + 1].start) + matches[j + 1].tag),
+                  ),
+                );
+              }
               const customTagNameExpression = ts.factory.createTemplateExpression(
                 ts.factory.createTemplateHead(templateHead),
                 templateSpans,
@@ -104,7 +128,7 @@ export function addCustomSuffix(compilerCtx: d.CompilerCtx, tagNameTransform: bo
         }
       }
 
-      // Find all instances of `customElements.get('stn-')` and replace them with `customElements.get('stn-' + getCustomSuffix())`
+      // Find all instances of `customElements.get('tagName')` and replace them with `customElements.get('tagName' + getCustomSuffix())`
       if (ts.isCallExpression(node)) {
         const expression = node.expression;
         if (
@@ -129,153 +153,6 @@ export function addCustomSuffix(compilerCtx: d.CompilerCtx, tagNameTransform: bo
           }
         }
       }
-
-
-//
-//       if (ts.isVariableStatement(node)) {
-//         if (node.declarationList.declarations.length === 0) {
-//           console.log("Found an empty variable statement:", node.getText());
-//         } else {
-//           node.declarationList.declarations.forEach(declaration => {
-//             if (ts.isIdentifier(declaration.name)) {
-//               console.log("Variable name:", declaration.name.text);
-//             } else {
-//               console.log("Found a variable statement with non-identifier name:", declaration.name.getText());
-//             }
-//           });
-//         }
-//               }
-
-//
-//       if (ts.isVariableStatement(node)) {
-//         console.log('Found a variable statement:');
-//   node.declarationList.declarations.forEach(declaration => {
-//     if (ts.isIdentifier(declaration.name)) {
-//       console.log(declaration.name.text);
-//     }
-//   });
-// }
-
-    if (ts.isVariableStatement(node)) {
-        const updated = false;
-        const newDeclarations = node.declarationList.declarations.map(declaration => {
-          if (ts.isIdentifier(declaration.name) && declaration.name.text.includes('Css')) {
-            console.log('Found a variable statement with Css:', declaration.name.text);
-            // if (ts.isArrayLiteralExpression(declaration.initializer)) {
-            //   const updatedElements = declaration.initializer.elements.map(element => {
-            //     if (ts.isStringLiteral(element)) {
-            //       const customTagNameExpression = ts.factory.createBinaryExpression(
-            //         ts.factory.createStringLiteral(element.text),
-            //         ts.SyntaxKind.PlusToken,
-            //         ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
-            //       );
-            //       console.log(element.text);
-            //       // return ts.factory.createStringLiteral(element.text + '-test');
-            //       // return customTagNameExpression;
-            //     }
-            //     return element;
-            //   });
-            //   updated = true;
-            //   return ts.factory.updateVariableDeclaration(
-            //     declaration,
-            //     declaration.name,
-            //     declaration.exclamationToken,
-            //     declaration.type,
-            //     ts.factory.createArrayLiteralExpression(updatedElements, false)
-            //   );
-            // }
-          }
-          return declaration;
-        });
-
-        if (updated) {
-          newNode = ts.factory.updateVariableStatement(
-            node,
-            node.modifiers,
-            ts.factory.updateVariableDeclarationList(node.declarationList, newDeclarations)
-          );
-        }
-      }
-
-
-
-      // if (
-      //   ts.isVariableStatement(node) &&
-      //   node.declarationList.flags & ts.NodeFlags.Const
-      // ) {
-      //   const decls = node.declarationList.declarations.map(decl => {
-      //     if (
-      //       decl.initializer &&
-      //       ts.isStringLiteral(decl.initializer)
-      //     ) {
-      //       console.log('Found a string literal:', decl.initializer.text);
-      //       const css = decl.initializer.text;
-      //       // Match stn-<tagname> not preceded by . or #
-      //       const regex = /(^|[^.#\w-])(stn-[a-zA-Z0-9-]+)/g;
-      //       let lastIndex = 0;
-      //       let match: RegExpExecArray | null;
-      //       const templateSpans: ts.TemplateSpan[] = [];
-      //       let templateHead = '';
-      //       let found = false;
-      //
-      //       while ((match = regex.exec(css)) !== null) {
-      //         console.log('Found a match:', match[2]);
-      //         console.log('prefix:', match[1]);
-      //         found = true;
-      //         const prefix = match[1];
-      //         const tag = match[2];
-      //         const start = match.index + prefix.length;
-      //         const end = start + tag.length;
-      //
-      //         if (templateHead === '') {
-      //           templateHead = css.slice(0, start) + tag;
-      //         } else {
-      //           templateSpans.push(
-      //             ts.factory.createTemplateSpan(
-      //               ts.factory.createCallExpression(
-      //                 ts.factory.createIdentifier('getCustomSuffix'),
-      //                 undefined,
-      //                 []
-      //               ),
-      //               ts.factory.createTemplateMiddle(css.slice(lastIndex, start) + tag)
-      //             )
-      //           );
-      //         }
-      //         lastIndex = end;
-      //       }
-      //
-      //       if (found) {
-      //         templateSpans.push(
-      //           ts.factory.createTemplateSpan(
-      //             ts.factory.createCallExpression(
-      //               ts.factory.createIdentifier('getCustomSuffix'),
-      //               undefined,
-      //               []
-      //             ),
-      //             ts.factory.createTemplateTail(css.slice(lastIndex))
-      //           )
-      //         );
-      //         const templateExpr = ts.factory.createTemplateExpression(
-      //           ts.factory.createTemplateHead(templateHead),
-      //           templateSpans
-      //         );
-      //         return ts.factory.updateVariableDeclaration(
-      //           decl,
-      //           decl.name,
-      //           decl.exclamationToken,
-      //           decl.type,
-      //           templateExpr
-      //         );
-      //       }
-      //     }
-      //     return decl;
-      //   });
-      //   newNode = ts.factory.updateVariableStatement(
-      //     node,
-      //     node.modifiers,
-      //     ts.factory.updateVariableDeclarationList(node.declarationList, decls)
-      //   );
-      // }
 
       return ts.visitEachChild(newNode, visit, context);
     }
