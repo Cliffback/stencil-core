@@ -277,8 +277,7 @@ export const generateEntryPoint = (
       ...cmpNames.map((cmp) => `            ${cmp},`),
       '        ].forEach(cmp => {',
       '            if (!customElements.get(cmp.is)) {',
-      '                console.warn("hello)";',
-      '                customElements.define(cmp.is + "-test", cmp, opts);',
+      '                customElements.define(cmp.is, cmp, opts);',
       '            }',
       '        });',
       '    }',
@@ -334,7 +333,6 @@ const getCustomBeforeTransformers = (
   };
   const customBeforeTransformers = [
     addDefineCustomElementFunctions(compilerCtx, components, outputTarget),
-    addCustomSuffix,
     updateStencilCoreImports(transformOpts.coreImportPath),
   ];
 
@@ -346,6 +344,7 @@ const getCustomBeforeTransformers = (
     nativeComponentTransform(compilerCtx, transformOpts),
     proxyCustomElement(compilerCtx, transformOpts),
     removeCollectionImports(compilerCtx),
+    addCustomSuffix,
   );
   return customBeforeTransformers;
 };
