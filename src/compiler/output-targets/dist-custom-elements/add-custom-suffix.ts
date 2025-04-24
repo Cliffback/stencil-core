@@ -1,7 +1,22 @@
+import { getModuleFromSourceFile } from 'src/compiler/transformers/transform-utils';
 import ts from 'typescript';
 
-export function addCustomSuffix(context: ts.TransformationContext): ts.Transformer<ts.SourceFile> {
+import type * as d from '../../../declarations';
+
+
+export function addCustomSuffix(compilerCtx: d.CompilerCtx, tagNameTransform: boolean): ts.TransformerFactory<ts.SourceFile> {
+  return (context: ts.TransformationContext) => {
+
+  if (!tagNameTransform) {
+    return (rootNode: ts.SourceFile): ts.SourceFile => rootNode;
+  }
   return (rootNode: ts.SourceFile): ts.SourceFile => {
+
+    const moduleFile = getModuleFromSourceFile(compilerCtx, rootNode);
+      if (moduleFile.cmps.length) {
+        const tagName = moduleFile.cmps[0];
+        console.log('Found a component:', tagName.tagName);
+      }
     const runtimeFunction = ts.factory.createFunctionDeclaration(
       undefined,
       undefined,
@@ -115,8 +130,156 @@ export function addCustomSuffix(context: ts.TransformationContext): ts.Transform
         }
       }
 
+
+//
+//       if (ts.isVariableStatement(node)) {
+//         if (node.declarationList.declarations.length === 0) {
+//           console.log("Found an empty variable statement:", node.getText());
+//         } else {
+//           node.declarationList.declarations.forEach(declaration => {
+//             if (ts.isIdentifier(declaration.name)) {
+//               console.log("Variable name:", declaration.name.text);
+//             } else {
+//               console.log("Found a variable statement with non-identifier name:", declaration.name.getText());
+//             }
+//           });
+//         }
+//               }
+
+//
+//       if (ts.isVariableStatement(node)) {
+//         console.log('Found a variable statement:');
+//   node.declarationList.declarations.forEach(declaration => {
+//     if (ts.isIdentifier(declaration.name)) {
+//       console.log(declaration.name.text);
+//     }
+//   });
+// }
+
+    if (ts.isVariableStatement(node)) {
+        const updated = false;
+        const newDeclarations = node.declarationList.declarations.map(declaration => {
+          if (ts.isIdentifier(declaration.name) && declaration.name.text.includes('Css')) {
+            console.log('Found a variable statement with Css:', declaration.name.text);
+            // if (ts.isArrayLiteralExpression(declaration.initializer)) {
+            //   const updatedElements = declaration.initializer.elements.map(element => {
+            //     if (ts.isStringLiteral(element)) {
+            //       const customTagNameExpression = ts.factory.createBinaryExpression(
+            //         ts.factory.createStringLiteral(element.text),
+            //         ts.SyntaxKind.PlusToken,
+            //         ts.factory.createCallExpression(ts.factory.createIdentifier('getCustomSuffix'), undefined, []),
+            //       );
+            //       console.log(element.text);
+            //       // return ts.factory.createStringLiteral(element.text + '-test');
+            //       // return customTagNameExpression;
+            //     }
+            //     return element;
+            //   });
+            //   updated = true;
+            //   return ts.factory.updateVariableDeclaration(
+            //     declaration,
+            //     declaration.name,
+            //     declaration.exclamationToken,
+            //     declaration.type,
+            //     ts.factory.createArrayLiteralExpression(updatedElements, false)
+            //   );
+            // }
+          }
+          return declaration;
+        });
+
+        if (updated) {
+          newNode = ts.factory.updateVariableStatement(
+            node,
+            node.modifiers,
+            ts.factory.updateVariableDeclarationList(node.declarationList, newDeclarations)
+          );
+        }
+      }
+
+
+
+      // if (
+      //   ts.isVariableStatement(node) &&
+      //   node.declarationList.flags & ts.NodeFlags.Const
+      // ) {
+      //   const decls = node.declarationList.declarations.map(decl => {
+      //     if (
+      //       decl.initializer &&
+      //       ts.isStringLiteral(decl.initializer)
+      //     ) {
+      //       console.log('Found a string literal:', decl.initializer.text);
+      //       const css = decl.initializer.text;
+      //       // Match stn-<tagname> not preceded by . or #
+      //       const regex = /(^|[^.#\w-])(stn-[a-zA-Z0-9-]+)/g;
+      //       let lastIndex = 0;
+      //       let match: RegExpExecArray | null;
+      //       const templateSpans: ts.TemplateSpan[] = [];
+      //       let templateHead = '';
+      //       let found = false;
+      //
+      //       while ((match = regex.exec(css)) !== null) {
+      //         console.log('Found a match:', match[2]);
+      //         console.log('prefix:', match[1]);
+      //         found = true;
+      //         const prefix = match[1];
+      //         const tag = match[2];
+      //         const start = match.index + prefix.length;
+      //         const end = start + tag.length;
+      //
+      //         if (templateHead === '') {
+      //           templateHead = css.slice(0, start) + tag;
+      //         } else {
+      //           templateSpans.push(
+      //             ts.factory.createTemplateSpan(
+      //               ts.factory.createCallExpression(
+      //                 ts.factory.createIdentifier('getCustomSuffix'),
+      //                 undefined,
+      //                 []
+      //               ),
+      //               ts.factory.createTemplateMiddle(css.slice(lastIndex, start) + tag)
+      //             )
+      //           );
+      //         }
+      //         lastIndex = end;
+      //       }
+      //
+      //       if (found) {
+      //         templateSpans.push(
+      //           ts.factory.createTemplateSpan(
+      //             ts.factory.createCallExpression(
+      //               ts.factory.createIdentifier('getCustomSuffix'),
+      //               undefined,
+      //               []
+      //             ),
+      //             ts.factory.createTemplateTail(css.slice(lastIndex))
+      //           )
+      //         );
+      //         const templateExpr = ts.factory.createTemplateExpression(
+      //           ts.factory.createTemplateHead(templateHead),
+      //           templateSpans
+      //         );
+      //         return ts.factory.updateVariableDeclaration(
+      //           decl,
+      //           decl.name,
+      //           decl.exclamationToken,
+      //           decl.type,
+      //           templateExpr
+      //         );
+      //       }
+      //     }
+      //     return decl;
+      //   });
+      //   newNode = ts.factory.updateVariableStatement(
+      //     node,
+      //     node.modifiers,
+      //     ts.factory.updateVariableDeclarationList(node.declarationList, decls)
+      //   );
+      // }
+
       return ts.visitEachChild(newNode, visit, context);
     }
     return ts.visitNode(newSourceFile, visit) as ts.SourceFile;
   };
+  }
 }
