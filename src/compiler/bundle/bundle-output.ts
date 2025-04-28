@@ -11,6 +11,7 @@ import { createCustomResolverAsync } from '../sys/resolve/resolve-module-async';
 import { appDataPlugin } from './app-data-plugin';
 import type { BundleOptions } from './bundle-interface';
 import { coreResolvePlugin } from './core-resolve-plugin';
+import { cssCustomSuffixPatch } from './cssCustomSuffixPatch'
 import { devNodeModuleResolveId } from './dev-node-module-resolve';
 import { extFormatPlugin } from './ext-format-plugin';
 import { extTransformsPlugin } from './ext-transforms-plugin';
@@ -150,6 +151,7 @@ export const getRollupOptions = (
         preventAssignment: true,
       }),
       fileLoadPlugin(compilerCtx.fs),
+      cssCustomSuffixPatch(config),
     ],
 
     treeshake: getTreeshakeOption(config, bundleOpts),
