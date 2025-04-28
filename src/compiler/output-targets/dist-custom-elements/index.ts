@@ -344,7 +344,7 @@ const getCustomBeforeTransformers = (
     nativeComponentTransform(compilerCtx, transformOpts),
     proxyCustomElement(compilerCtx, transformOpts),
     removeCollectionImports(compilerCtx),
-    addCustomSuffix,
+    addCustomSuffix(compilerCtx, components, config.extras.tagNameTransform),
   );
   return customBeforeTransformers;
 };
