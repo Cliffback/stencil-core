@@ -64,7 +64,7 @@ export const generateAppTypes = async (
  * @param areTypesInternal determines if non-exported type definitions are being generated or not
  * @returns the contents of the `components.d.ts` file
  */
-const generateComponentTypesFile = (
+export const generateComponentTypesFile = (
   config: d.ValidatedConfig,
   buildCtx: d.BuildCtx,
   areTypesInternal: boolean,

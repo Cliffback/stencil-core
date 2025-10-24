@@ -10,6 +10,7 @@ export { FsWriteResults } from './sys/in-memory-fs';
 export { nodeRequire } from './sys/node-require';
 export { createSystem } from './sys/stencil-sys';
 export { transpile, transpileSync } from './transpile';
+export { generateComponentTypesFile } from './types/generate-app-types';
 export { createWorkerContext } from './worker/worker-thread';
 export { createWorkerMessageHandler } from './worker/worker-thread';
 export { ts };
